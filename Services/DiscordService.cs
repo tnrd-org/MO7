@@ -99,10 +99,7 @@ public class DiscordService : BackgroundService
             };
 
             Result<IMessage> messageResult = await channelApi.CreateMessageAsync(target.ChannelSnowflake,
-                embeds: new List<IEmbed>()
-                {
-                    embed
-                },
+                embeds: new List<IEmbed>() { embed },
                 ct: stoppingToken);
 
             if (messageResult.IsSuccess)
