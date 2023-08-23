@@ -93,12 +93,13 @@ public class DiscordService : BackgroundService
 
             IEmbed embed = eventData.EventType switch
             {
-                EventType.Available => CreateAvailableEmbed(eventData.Mod, target.RoleSnowflake, target.Tag),
-                EventType.Update => CreateUpdateEmbed(eventData.Mod, target.RoleSnowflake, target.Tag),
+                EventType.Available => CreateAvailableEmbed(eventData.Mod, target.Tag),
+                EventType.Update => CreateUpdateEmbed(eventData.Mod),
                 _ => throw new ArgumentOutOfRangeException()
             };
 
             Result<IMessage> messageResult = await channelApi.CreateMessageAsync(target.ChannelSnowflake,
+                content: $"<@&{target.RoleSnowflake}>",
                 embeds: new List<IEmbed>() { embed },
                 ct: stoppingToken);
 
@@ -113,7 +114,7 @@ public class DiscordService : BackgroundService
         }
     }
 
-    private IEmbed CreateAvailableEmbed(Mod mod, Snowflake roleSnowflake, string tag)
+    private IEmbed CreateAvailableEmbed(Mod mod, string tag)
     {
         EmbedBuilder embedBuilder = new EmbedBuilder()
             .WithAuthor(AUTHOR_NAME, AUTHOR_URL, AUTHOR_ICON)
@@ -144,7 +145,6 @@ public class DiscordService : BackgroundService
             $"Size: {new DataSize(mod.Modfile.FileSize, Unit.Byte).Normalize()}",
             true);
         embedBuilder.AddField("Tags", string.Join(", ", mod.Tags.Select(x => x.Name)), true);
-        embedBuilder.AddField("Mentions", $"<@&{roleSnowflake}>");
 
         Result<Embed> result = embedBuilder.Build();
 
@@ -154,7 +154,7 @@ public class DiscordService : BackgroundService
         throw new InvalidOperationException("Failed to create embed");
     }
 
-    private IEmbed CreateUpdateEmbed(Mod mod, Snowflake roleSnowflake, string tag)
+    private IEmbed CreateUpdateEmbed(Mod mod)
     {
         EmbedBuilder embedBuilder = new EmbedBuilder()
             .WithAuthor(AUTHOR_NAME, AUTHOR_URL, AUTHOR_ICON)
@@ -168,8 +168,6 @@ public class DiscordService : BackgroundService
         {
             embedBuilder.AddField("Changelog", mod.Modfile.Changelog);
         }
-
-        embedBuilder.AddField("Mentions", $"<@&{roleSnowflake}>");
 
         Result<Embed> result = embedBuilder.Build();
 
