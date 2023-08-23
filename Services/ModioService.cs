@@ -34,10 +34,22 @@ public class ModioService : BackgroundService
         while (!stoppingToken.IsCancellationRequested)
         {
             logger.LogInformation("Checking for new events");
-            SearchClient<ModEvent> searchClient = modsClient.GetEvents(
-                Filter.Custom("date_added", Operator.GreaterThan, lastCheckedStamp.ToString()));
 
-            IReadOnlyList<ModEvent> events = await searchClient.ToList();
+            IReadOnlyList<ModEvent> events;
+            
+            try
+            {
+                SearchClient<ModEvent> searchClient = modsClient.GetEvents(
+                    Filter.Custom("date_added", Operator.GreaterThan, lastCheckedStamp.ToString()));
+
+                events = await searchClient.ToList();
+            }
+            catch (Exception e)
+            {
+                logger.LogError(e, "Failed to get events");
+                await Task.Delay(TimeSpan.FromMinutes(1), stoppingToken);
+                continue;
+            }
 
             List<IGrouping<uint, ModEvent>> eventsGroupedByMod = events.GroupBy(x => x.ModId).ToList();
 
