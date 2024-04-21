@@ -36,7 +36,7 @@ public class ModioService : BackgroundService
             logger.LogInformation("Checking for new events");
 
             IReadOnlyList<ModEvent> events;
-            
+
             try
             {
                 SearchClient<ModEvent> searchClient = modsClient.GetEvents(
@@ -74,7 +74,7 @@ public class ModioService : BackgroundService
             return;
 
         Mod mod;
-        
+
         try
         {
             mod = await modsClient[modId].Get();

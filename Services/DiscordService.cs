@@ -2,7 +2,9 @@
 using Microsoft.Extensions.Options;
 using MO7.Events;
 using MO7.Options;
+using MO7.Tools;
 using Modio.Models;
+using Remora.Discord.API;
 using Remora.Discord.API.Abstractions.Objects;
 using Remora.Discord.API.Abstractions.Rest;
 using Remora.Discord.API.Objects;
@@ -34,6 +36,11 @@ public class DiscordService : BackgroundService
         {
             return mod.Tags.Any(x => Tag.Equals(x.Name, StringComparison.InvariantCultureIgnoreCase));
         }
+
+        public bool IsValidForTag(string tag)
+        {
+            return Tag.Equals(tag, StringComparison.InvariantCultureIgnoreCase);
+        }
     }
 
     private const string AUTHOR_NAME = "Zeepkist";
@@ -43,6 +50,7 @@ public class DiscordService : BackgroundService
     private readonly EventRepository eventRepository;
     private readonly IDiscordRestChannelAPI channelApi;
     private readonly ILogger<DiscordService> logger;
+    private readonly ToolRepository _toolRepository;
 
     private readonly List<Target> targets = new();
 
@@ -50,12 +58,12 @@ public class DiscordService : BackgroundService
         EventRepository eventRepository,
         ILogger<DiscordService> logger,
         IDiscordRestChannelAPI channelApi,
-        IOptions<DiscordOptions> discordOptions
-    )
+        IOptions<DiscordOptions> discordOptions, ToolRepository toolRepository)
     {
         this.eventRepository = eventRepository;
         this.logger = logger;
         this.channelApi = channelApi;
+        _toolRepository = toolRepository;
 
         DiscordOptions options = discordOptions.Value;
 
@@ -66,6 +74,10 @@ public class DiscordService : BackgroundService
         targets.Add(new Target(options.ModTag,
             options.ModChannelSnowflake,
             options.ModRoleSnowflake));
+
+        targets.Add(new Target("Tool",
+            options.ToolChannelSnowflake,
+            options.ToolRoleSnowflake));
     }
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
@@ -78,6 +90,12 @@ public class DiscordService : BackgroundService
             foreach (EventData eventData in events)
             {
                 await ProcessEvent(eventData, stoppingToken);
+            }
+
+            IReadOnlyList<ToolData> data = _toolRepository.GetData();
+            foreach (ToolData toolData in data)
+            {
+                await ProcessToolData(toolData, stoppingToken);
             }
 
             await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
@@ -187,6 +205,58 @@ public class DiscordService : BackgroundService
             return string.IsNullOrEmpty(mod.Modfile.Version)
                 ? "A new version is available."
                 : $"A new version is available. [Version {mod.Modfile.Version}]({mod.Modfile!.Download!.BinaryUrl})";
+        }
+    }
+
+    private async Task ProcessToolData(ToolData toolData, CancellationToken stoppingToken)
+    {
+        foreach (Target target in targets)
+        {
+            if (!target.IsValidForTag("tool"))
+                continue;
+
+            IEmbed embed = CreateUpdateEmbed(toolData);
+
+            Result<IMessage> messageResult = await channelApi.CreateMessageAsync(target.ChannelSnowflake,
+                content: $"<@&{target.RoleSnowflake}>",
+                embeds: new List<IEmbed>() { embed },
+                ct: stoppingToken);
+
+            if (messageResult.IsSuccess)
+            {
+                logger.LogInformation("Successfully sent message");
+            }
+            else
+            {
+                logger.LogError("Failed to send message: {Result}", messageResult.Error.ToString());
+            }
+        }
+    }
+
+    private IEmbed CreateUpdateEmbed(ToolData toolData)
+    {
+        EmbedBuilder embedBuilder = new EmbedBuilder()
+            .WithAuthor(AUTHOR_NAME, AUTHOR_URL)
+            .WithTitle(toolData.Name)
+            .WithUrl(toolData.WebsiteUrl ?? string.Empty)
+            .WithThumbnailUrl(AUTHOR_ICON)
+            .WithDescription(GetDescription())
+            .WithFooter(toolData.Interaction.Member.Value.User.Value.Username, CDN.GetUserAvatarUrl(toolData.Interaction.Member.Value.User.Value).Entity.ToString());
+
+        embedBuilder.AddField("Changelog", toolData.Changelog);
+
+        Result<Embed> result = embedBuilder.Build();
+
+        if (result.IsSuccess)
+            return result.Entity;
+
+        throw new InvalidOperationException("Failed to create embed");
+
+        string GetDescription()
+        {
+            return string.IsNullOrEmpty(toolData.DownloadUrl)
+                ? "A new version is available."
+                : $"A new version is available. [Version {toolData.Version}]({toolData.DownloadUrl})";
         }
     }
 }
