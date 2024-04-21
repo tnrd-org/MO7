@@ -12,7 +12,7 @@ namespace MO7.Commands;
 
 public partial class ToolCommandGroup
 {
-
+    [Ephemeral]
     [SuppressInteractionResponse(true)]
     [Command("update")]
     [UsedImplicitly]
